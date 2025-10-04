@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lost Property — Quick Upload</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Helvetica,Arial;max-width:720px;margin:2rem auto;padding:1rem}
+    label{display:block;margin:0.6rem 0}
+    .btn{padding:0.6rem 0.9rem;border-radius:6px;border:0;background:#111;color:#fff}
+    .small{font-size:0.9rem;color:#555}
+    #overlay{display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:1.1rem}
+    input,select{font-size:1rem;padding:0.4rem;margin-top:0.2rem}
+  </style>
+</head>
+<body>
+  <h1>Quick Lost Item Upload</h1>
+  <p class="small">Scan QR → snap photo → choose category → submit. Takes ~10s. Photos retained 30 days.</p>
+
+  <!-- IMPORTANT: replace the action URL below with your Make.com webhook URL -->
+  <form id="uploadForm" action="https://hook.eu2.make.com/gkebdrmtjlkwd6wikd1wsmoht4x41p9v" method="post" enctype="multipart/form-data" target="hidden_iframe" autocomplete="off">
+    <input type="hidden" name="venue" id="venueInput" value="Club X">
+
+    <label>Photo (required)
+      <input type="file" name="photo" accept="image/*;capture=camera" required>
+    </label>
+
+    <label>Category
+      <select name="category" required>
+        <option>ID</option>
+        <option>Wallet</option>
+        <option>Phone</option>
+        <option>Keys</option>
+        <option>Card</option>
+        <option>Bag</option>
+        <option>Clothing</option>
+        <option>Other</option>
+      </select>
+    </label>
+
+    <label>Short description (optional)
+      <input name="desc" maxlength="120" placeholder="e.g. black leather wallet">
+    </label>
+
+    <label>Found by (optional)
+      <input name="foundBy" maxlength="50" placeholder="e.g. Joe - bar">
+    </label>
+
+    <button class="btn" type="submit">Upload</button>
+  </form>
+
+  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+  <div id="overlay">Uploading… please wait</div>
+  <div id="result" style="display:none;margin-top:1rem;padding:0.8rem;border:1px solid #ddd;border-radius:6px;background:#fbfbfb"></div>
+
+  <script>
+    (function(){
+      const params = new URLSearchParams(location.search);
+      const venue = params.get('venue') || 'Club X';
+      document.getElementById('venueInput').value = venue;
+
+      const form = document.getElementById('uploadForm');
+      const overlay = document.getElementById('overlay');
+      const result = document.getElementById('result');
+      const iframe = document.getElementById('hidden_iframe');
+
+      form.addEventListener('submit', function(){
+        overlay.style.display = 'flex';
+      });
+
+      // When the hidden iframe finishes loading after the POST finishes,
+      // show a simple success message and reset the form. This avoids redirecting
+      // staff to a raw JSON response and keeps the flow in one page.
+      iframe.addEventListener('load', function(){
+        overlay.style.display = 'none';
+        result.style.display = 'block';
+        result.innerText = 'Upload received. Keep item secure. Add claim code to manager noticeboard.';
+        form.reset();
+      });
+    })();
+  </script>
+</body>
+</html>
