@@ -5,19 +5,47 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Lost Property — Quick Upload</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Helvetica,Arial;max-width:720px;margin:2rem auto;padding:1rem}
-    label{display:block;margin:0.6rem 0}
-    .btn{padding:0.6rem 0.9rem;border-radius:6px;border:0;background:#111;color:#fff}
-    .small{font-size:0.9rem;color:#555}
-    #overlay{display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:1.1rem}
-    input,select{font-size:1rem;padding:0.4rem;margin-top:0.2rem}
+    body {
+      font-family: system-ui, Segoe UI, Helvetica, Arial;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 1rem;
+    }
+    label { display: block; margin: 0.6rem 0; }
+    .btn { padding: 0.6rem 0.9rem; border-radius: 6px; border: 0; background: #111; color: #fff; }
+    .small { font-size: 0.9rem; color: #555; }
+    #overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      font-size: 1.1rem;
+    }
+    input, select {
+      font-size: 1rem;
+      padding: 0.4rem;
+      margin-top: 0.2rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .hidden { display: none; }
+    fieldset {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem;
+      margin-top: 1rem;
+      background: #fbfbfb;
+    }
   </style>
 </head>
 <body>
   <h1>Quick Lost Item Upload</h1>
   <p class="small">Scan QR → snap photo → choose category → submit. Takes ~10s. Photos retained 30 days.</p>
 
-  <!-- IMPORTANT: replace the action URL below with your Make.com webhook URL -->
+  <!-- Replace action URL with your Make.com webhook -->
   <form id="uploadForm" action="https://hook.eu2.make.com/gkebdrmtjlkwd6wikd1wsmoht4x41p9v" method="post" enctype="multipart/form-data" target="hidden_iframe" autocomplete="off">
     <input type="hidden" name="venue" id="venueInput" value="Club X">
 
@@ -26,7 +54,8 @@
     </label>
 
     <label>Category
-      <select name="category" required>
+      <select name="category" id="categorySelect" required>
+        <option value="">Select...</option>
         <option>ID</option>
         <option>Wallet</option>
         <option>Phone</option>
@@ -38,9 +67,29 @@
       </select>
     </label>
 
-    <label>Short description (optional)
-      <input name="desc" maxlength="120" placeholder="e.g. black leather wallet">
+    <label>Short description (required)
+      <input name="desc" id="descInput" maxlength="120" placeholder="e.g. black leather wallet" required>
     </label>
+
+    <!-- Conditional fields -->
+    <fieldset id="idFields" class="hidden">
+      <legend>ID Details</legend>
+      <label>First Name <input name="id_firstName" required></label>
+      <label>Last Name <input name="id_lastName" required></label>
+      <label>ID Number <input name="id_number" required></label>
+    </fieldset>
+
+    <fieldset id="walletFields" class="hidden">
+      <legend>Wallet — Card Name</legend>
+      <label>First Name <input name="wallet_firstName" required></label>
+      <label>Last Name <input name="wallet_lastName" required></label>
+    </fieldset>
+
+    <fieldset id="cardFields" class="hidden">
+      <legend>Card Details</legend>
+      <label>First Name <input name="card_firstName" required></label>
+      <label>Last Name <input name="card_lastName" required></label>
+    </fieldset>
 
     <label>Found by (optional)
       <input name="foundBy" maxlength="50" placeholder="e.g. Joe - bar">
@@ -63,19 +112,42 @@
       const overlay = document.getElementById('overlay');
       const result = document.getElementById('result');
       const iframe = document.getElementById('hidden_iframe');
+      const categorySelect = document.getElementById('categorySelect');
+
+      const idFields = document.getElementById('idFields');
+      const walletFields = document.getElementById('walletFields');
+      const cardFields = document.getElementById('cardFields');
+
+      // show/hide relevant sections
+      categorySelect.addEventListener('change', () => {
+        const val = categorySelect.value;
+        [idFields, walletFields, cardFields].forEach(f => {
+          f.classList.add('hidden');
+          Array.from(f.querySelectorAll('input')).forEach(i => i.required = false);
+        });
+
+        if (val === 'ID') {
+          idFields.classList.remove('hidden');
+          idFields.querySelectorAll('input').forEach(i => i.required = true);
+        } else if (val === 'Wallet') {
+          walletFields.classList.remove('hidden');
+          walletFields.querySelectorAll('input').forEach(i => i.required = true);
+        } else if (val === 'Card') {
+          cardFields.classList.remove('hidden');
+          cardFields.querySelectorAll('input').forEach(i => i.required = true);
+        }
+      });
 
       form.addEventListener('submit', function(){
         overlay.style.display = 'flex';
       });
 
-      // When the hidden iframe finishes loading after the POST finishes,
-      // show a simple success message and reset the form. This avoids redirecting
-      // staff to a raw JSON response and keeps the flow in one page.
       iframe.addEventListener('load', function(){
         overlay.style.display = 'none';
         result.style.display = 'block';
         result.innerText = 'Upload received. Keep item secure. Add claim code to manager noticeboard.';
         form.reset();
+        [idFields, walletFields, cardFields].forEach(f => f.classList.add('hidden'));
       });
     })();
   </script>
