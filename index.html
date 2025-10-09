@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Lost Property — Quick Upload</title>
+  <title>Lost Property — Quick Upload (Improved OCR)</title>
   <style>
     body {
       font-family: system-ui, Segoe UI, Helvetica, Arial;
@@ -25,7 +25,7 @@
       font-size: 1.1rem;
       z-index: 999;
     }
-    input, select {
+    input, select, textarea {
       font-size: 1rem;
       padding: 0.4rem;
       margin-top: 0.2rem;
@@ -45,6 +45,8 @@
       color: #444;
       margin-top: 0.3rem;
     }
+    details { margin-top: 0.6rem; }
+    pre { white-space: pre-wrap; font-size: 0.9rem; background:#fff; padding:0.6rem; border-radius:6px; border:1px solid #eee; }
   </style>
 </head>
 <body>
@@ -81,7 +83,20 @@
       <legend>ID Details</legend>
       <label>First Name <input name="id_firstName" id="id_firstName"></label>
       <label>Last Name <input name="id_lastName" id="id_lastName"></label>
-      <label>ID Number (last 4 digits only)<input name="id_number" id="id_number"></label>
+      <label>ID Number (last 4 digits only) <input name="id_number" id="id_number" placeholder="e.g. 1234"></label>
+
+      <details id="ocrDetails">
+        <summary>OCR raw text & suggestions (click to expand)</summary>
+        <div style="margin-top:0.5rem">
+          <strong>Raw OCR text</strong>
+          <pre id="ocrRaw">—</pre>
+
+          <strong>Detected suggestion</strong>
+          <pre id="ocrSuggestion">—</pre>
+
+          <div style="margin-top:0.5rem" class="small">If suggestion is wrong, edit the name/ID fields before submitting.</div>
+        </div>
+      </details>
     </fieldset>
 
     <fieldset id="walletFields" class="hidden">
@@ -126,8 +141,10 @@
     const cardFields = document.getElementById('cardFields');
     const photoInput = document.getElementById('photoInput');
     const ocrStatus = document.getElementById('ocrStatus');
+    const ocrRaw = document.getElementById('ocrRaw');
+    const ocrSuggestion = document.getElementById('ocrSuggestion');
 
-    // show/hide relevant sections
+    // show/hide relevant sections and toggle required
     categorySelect.addEventListener('change', () => {
       const val = categorySelect.value;
       [idFields, walletFields, cardFields].forEach(f => {
@@ -147,11 +164,141 @@
       }
     });
 
-    // Hashing function (optional, non-reversible)
-    async function hashValue(value) {
-      const data = new TextEncoder().encode(value);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    // small helpers
+    function onlyDigits(s){ return (s||'').replace(/\D/g,''); }
+    function normalizeForNumbers(s){
+      // replace common OCR confusions *for strings that should be numeric*
+      if(!s) return s;
+      return s.replace(/[Oo]/g,'0').replace(/[Il\|]/g,'1').replace(/S/g,'5').replace(/B/g,'8');
+    }
+    function compact(s){ return (s||'').replace(/\s+/g,'').replace(/[^A-Za-z0-9]/g,''); }
+    function titleCase(s){ if(!s) return ''; return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '); }
+
+    // parse OCR output with heuristics
+    function parseOCR(text){
+      const raw = (text||'').replace(/\r/g,'\n');
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+
+      // find MRZ-like lines (look for '<' char often present on passports)
+      const mrzLines = lines.filter(l => l.includes('<') && l.replace(/\s/g,'').length >= 30);
+      let suggestion = { id: null, first: '', last: '', source: 'none' };
+
+      // 1) If MRZ present, try crude MRZ name parse
+      if(mrzLines.length){
+        const joined = mrzLines.join(' ').replace(/\s+/g,' ');
+        // MRZ often includes '<<' between surname/given names
+        const m = joined.match(/([A-Z<]{3,}<<[A-Z<]{2,})/i);
+        const trimmed = m ? m[0] : joined;
+        const parts = trimmed.split('<<');
+        if(parts.length >= 2){
+          const surname = parts[0].replace(/</g,' ').trim();
+          const given = parts[1].replace(/</g,' ').trim().split(' ')[0] || '';
+          suggestion.first = titleCase(given.split(' ').slice(0,2).join(' '));
+          suggestion.last = titleCase(surname.split(' ').slice(0,2).join(' '));
+          suggestion.source = 'mrz';
+        }
+      }
+
+      // 2) Look for explicit labelled fields like "Surname", "Name", "Driver no", "Licence no"
+      const lower = raw.toLowerCase();
+      // ID number candidate detection: sequences of digits/alphanum
+      const digitSeq = (raw.match(/\d{6,}/g) || []).map(s => s.trim());
+      const alphaNumSeq = (raw.match(/[A-Z0-9][A-Z0-9\-\s]{5,20}/gi) || []).map(s => s.trim());
+      const allCandidates = Array.from(new Set([...digitSeq, ...alphaNumSeq]));
+
+      // scoring function: prefer candidates near label words
+      const labelKeywords = ['licence','license','licence no','licence number','driving licence','driving license','driving no','driver number','driver no','lic no','id no','id number','id:','dl:','lic:','licn:','lic no.','licence no.'];
+      const lowerFull = raw.toLowerCase();
+
+      let scored = allCandidates.map(c => {
+        const norm = compact(c);
+        let score = 0;
+        const ci = lowerFull.indexOf(c.toLowerCase());
+        if(ci >= 0){
+          for(const kw of labelKeywords){
+            const kidx = lowerFull.indexOf(kw);
+            if(kidx >= 0 && Math.abs(kidx - ci) < 75) score += 4;
+          }
+        }
+        if(/[A-Za-z]/.test(norm) && /\d/.test(norm)) score += 2; // alnum
+        score += Math.min(6, norm.length / 4);
+        return { raw: c, norm, score };
+      });
+      scored = scored.sort((a,b) => b.score - a.score);
+
+      let bestId = scored.length ? scored[0].raw : null;
+
+      // If MRZ didn't give name, try to find name labels
+      if(!suggestion.first && !suggestion.last){
+        const nameLabelPatterns = [
+          /surname[:\s]*([A-Z ,.'-]+)/i,
+          /last name[:\s]*([A-Z ,.'-]+)/i,
+          /family name[:\s]*([A-Z ,.'-]+)/i,
+          /name[:\s]*([A-Z ,.'-]+)/i,
+          /holder[:\s]*([A-Z ,.'-]+)/i
+        ];
+        for(const pat of nameLabelPatterns){
+          const m = raw.match(pat);
+          if(m && m[1]){
+            const candidate = m[1].replace(/[^A-Za-z\s\-,']/g,' ').trim();
+            if(candidate){
+              // if comma present: "SURNAME, FORNAME"
+              if(candidate.includes(',')){
+                const [s,f] = candidate.split(',',2);
+                suggestion.last = titleCase(s.trim());
+                suggestion.first = titleCase(f.trim().split(' ')[0] || '');
+              } else {
+                const words = candidate.split(/\s+/).filter(Boolean);
+                suggestion.first = titleCase(words[0] || '');
+                suggestion.last = titleCase(words.slice(-1)[0] || '');
+              }
+              suggestion.source = 'label';
+              break;
+            }
+          }
+        }
+      }
+
+      // Fallback name heuristic: choose a line with mostly letters and 2-3 words and few digits
+      if(!suggestion.first && !suggestion.last){
+        let candidateLine = '';
+        let bestScore = 0;
+        lines.forEach(line => {
+          const letters = (line.match(/[A-Za-z]/g) || []).length;
+          const digits = (line.match(/\d/g) || []).length;
+          const words = line.split(/\s+/).filter(Boolean).length;
+          const score = letters - digits + (words>=2 ? 2 : 0);
+          if(score > bestScore && letters > 3 && digits < 3 && words >= 2){
+            bestScore = score;
+            candidateLine = line;
+          }
+        });
+        if(candidateLine){
+          // prefer "SURNAME, FORENAMES" form
+          if(candidateLine.includes(',')){
+            const [s,f] = candidateLine.split(',',2);
+            suggestion.last = titleCase(s.replace(/[^A-Za-z\s'-]/g,' ').trim());
+            suggestion.first = titleCase((f||'').replace(/[^A-Za-z\s'-]/g,' ').trim().split(' ')[0] || '');
+          } else {
+            const w = candidateLine.replace(/[^A-Za-z\s'-]/g,' ').trim().split(/\s+/);
+            suggestion.first = titleCase(w[0]||'');
+            suggestion.last = titleCase(w[w.length-1]||'');
+          }
+          suggestion.source = 'heuristic';
+        }
+      }
+
+      // Prepare suggestion text
+      const suggestionText = {
+        idCandidates: scored.map(s => s.raw).slice(0,6),
+        selectedId: bestId || null,
+        parsedNameFirst: suggestion.first || null,
+        parsedNameLast: suggestion.last || null,
+        source: suggestion.source || null,
+        rawTextPreview: lines.slice(0,25).join('\n')
+      };
+
+      return { suggestion, suggestionText, raw };
     }
 
     // OCR scanning
@@ -159,35 +306,61 @@
       const file = e.target.files[0];
       if (!file) return;
 
-      ocrStatus.textContent = 'Scanning ID for text… (this can take ~5–10s)';
+      ocrStatus.textContent = 'Scanning image (OCR) — please hold on…';
+      ocrRaw.textContent = '—';
+      ocrSuggestion.textContent = '—';
       try {
-        const { data: { text } } = await Tesseract.recognize(file, 'eng');
-        ocrStatus.textContent = 'Text detected, checking for ID number…';
+        // run tesseract
+        const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+          logger: m => {
+            // optionally show progress
+            if(m && m.status && m.progress){
+              const p = Math.round(m.progress*100);
+              ocrStatus.textContent = `Scanning image (OCR) — ${m.status} ${p}%`;
+            }
+          }
+        });
 
-        // Try to find an ID number pattern (8–12 digits)
-        const match = text.match(/\b\d{8,12}\b/);
-        const id_number = match ? match[0] : '';
+        ocrStatus.textContent = 'Processing OCR results…';
+        const parsed = parseOCR(text);
 
-        if (id_number) {
-          const last4 = id_number.slice(-4);
-          document.getElementById('id_number').value = last4;
+        // fill raw text & suggestions
+        ocrRaw.textContent = parsed.raw;
+        ocrSuggestion.textContent = JSON.stringify(parsed.suggestionText, null, 2);
 
-          // Optional: hash full ID locally but do NOT upload full number
-          const hash = await hashValue(id_number);
-          console.log('Hashed full ID (not sent):', hash);
+        // Use best ID candidate: normalize numeric confusion for numeric strings
+        let best = parsed.suggestionText.selectedId;
+        if(best){
+          // if candidate contains digits, try to produce numeric-only and fix common OCR confusions
+          let candidate = best;
+          // If candidate is mixed, attempt to extract most digit-rich substring
+          const digitGroups = candidate.match(/\d{4,}/g);
+          if(digitGroups && digitGroups.length) {
+            candidate = digitGroups[0];
+          }
+          // normalize typical OCR letter/digit confusions for numeric parts
+          const normalized = normalizeForNumbers(candidate);
+          const digits = onlyDigits(normalized);
+          if(digits.length >= 4){
+            document.getElementById('id_number').value = digits.slice(-4);
+          } else {
+            // fallback: last 4 chars from compact form
+            const comp = compact(candidate);
+            document.getElementById('id_number').value = comp.slice(-4);
+          }
         }
 
-        // Try to find possible name fields
-        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-        if (lines.length > 1) {
-          document.getElementById('id_firstName').value = lines[0].split(' ')[0] || '';
-          document.getElementById('id_lastName').value = lines[0].split(' ')[1] || '';
-        }
+        // Fill name fields if found (staff should verify)
+        const pf = parsed.suggestionText.parsedNameFirst;
+        const pl = parsed.suggestionText.parsedNameLast;
+        if(pf) document.getElementById('id_firstName').value = pf;
+        if(pl) document.getElementById('id_lastName').value = pl;
 
-        ocrStatus.textContent = '✅ ID details auto-filled (please verify).';
+        ocrStatus.textContent = '✅ OCR suggestion filled (please verify fields).';
+
       } catch (err) {
-        console.error(err);
-        ocrStatus.textContent = '❌ Could not extract text. Please enter manually.';
+        console.error('OCR error', err);
+        ocrStatus.textContent = '❌ OCR failed — please enter details manually.';
       }
     });
 
@@ -203,6 +376,8 @@
       form.reset();
       [idFields, walletFields, cardFields].forEach(f => f.classList.add('hidden'));
       ocrStatus.textContent = '';
+      ocrRaw.textContent = '—';
+      ocrSuggestion.textContent = '—';
     });
   })();
   </script>
