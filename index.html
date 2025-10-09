@@ -12,7 +12,7 @@
       padding: 1rem;
     }
     label { display: block; margin: 0.6rem 0; }
-    .btn { padding: 0.6rem 0.9rem; border-radius: 6px; border: 0; background: #111; color: #fff; }
+    .btn { padding: 0.6rem 0.9rem; border-radius: 6px; border: 0; background: #111; color: #fff; cursor: pointer; }
     .small { font-size: 0.9rem; color: #555; }
     #overlay {
       display: none;
@@ -23,6 +23,7 @@
       background: rgba(0,0,0,0.6);
       color: #fff;
       font-size: 1.1rem;
+      z-index: 999;
     }
     input, select {
       font-size: 1rem;
@@ -39,18 +40,23 @@
       margin-top: 1rem;
       background: #fbfbfb;
     }
+    .ocr-status {
+      font-size: 0.9rem;
+      color: #444;
+      margin-top: 0.3rem;
+    }
   </style>
 </head>
 <body>
   <h1>Quick Lost Item Upload</h1>
   <p class="small">Scan QR → snap photo → choose category → submit. Takes ~10s. Photos retained 30 days.</p>
 
-  <!-- Replace action URL with your Make.com webhook -->
   <form id="uploadForm" action="https://hook.eu2.make.com/gkebdrmtjlkwd6wikd1wsmoht4x41p9v" method="post" enctype="multipart/form-data" target="hidden_iframe" autocomplete="off">
     <input type="hidden" name="venue" id="venueInput" value="Club X">
 
     <label>Photo (required)
-      <input type="file" name="photo" accept="image/*;capture=camera" required>
+      <input type="file" id="photoInput" name="photo" accept="image/*;capture=camera" required>
+      <div id="ocrStatus" class="ocr-status"></div>
     </label>
 
     <label>Category
@@ -71,24 +77,23 @@
       <input name="desc" id="descInput" maxlength="120" placeholder="e.g. black leather wallet" required>
     </label>
 
-    <!-- Conditional fields -->
     <fieldset id="idFields" class="hidden">
       <legend>ID Details</legend>
-      <label>First Name <input name="id_firstName" required></label>
-      <label>Last Name <input name="id_lastName" required></label>
-      <label>ID Number <input name="id_number" required></label>
+      <label>First Name <input name="id_firstName" id="id_firstName"></label>
+      <label>Last Name <input name="id_lastName" id="id_lastName"></label>
+      <label>ID Number (last 4 digits only)<input name="id_number" id="id_number"></label>
     </fieldset>
 
     <fieldset id="walletFields" class="hidden">
       <legend>Wallet — Card Name</legend>
-      <label>First Name <input name="wallet_firstName" required></label>
-      <label>Last Name <input name="wallet_lastName" required></label>
+      <label>First Name <input name="wallet_firstName"></label>
+      <label>Last Name <input name="wallet_lastName"></label>
     </fieldset>
 
     <fieldset id="cardFields" class="hidden">
       <legend>Card Details</legend>
-      <label>First Name <input name="card_firstName" required></label>
-      <label>Last Name <input name="card_lastName" required></label>
+      <label>First Name <input name="card_firstName"></label>
+      <label>Last Name <input name="card_lastName"></label>
     </fieldset>
 
     <label>Found by (optional)
@@ -102,54 +107,104 @@
   <div id="overlay">Uploading… please wait</div>
   <div id="result" style="display:none;margin-top:1rem;padding:0.8rem;border:1px solid #ddd;border-radius:6px;background:#fbfbfb"></div>
 
+  <!-- OCR Library -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+
   <script>
-    (function(){
-      const params = new URLSearchParams(location.search);
-      const venue = params.get('venue') || 'Club X';
-      document.getElementById('venueInput').value = venue;
+  (function(){
+    const params = new URLSearchParams(location.search);
+    const venue = params.get('venue') || 'Club X';
+    document.getElementById('venueInput').value = venue;
 
-      const form = document.getElementById('uploadForm');
-      const overlay = document.getElementById('overlay');
-      const result = document.getElementById('result');
-      const iframe = document.getElementById('hidden_iframe');
-      const categorySelect = document.getElementById('categorySelect');
+    const form = document.getElementById('uploadForm');
+    const overlay = document.getElementById('overlay');
+    const result = document.getElementById('result');
+    const iframe = document.getElementById('hidden_iframe');
+    const categorySelect = document.getElementById('categorySelect');
+    const idFields = document.getElementById('idFields');
+    const walletFields = document.getElementById('walletFields');
+    const cardFields = document.getElementById('cardFields');
+    const photoInput = document.getElementById('photoInput');
+    const ocrStatus = document.getElementById('ocrStatus');
 
-      const idFields = document.getElementById('idFields');
-      const walletFields = document.getElementById('walletFields');
-      const cardFields = document.getElementById('cardFields');
+    // show/hide relevant sections
+    categorySelect.addEventListener('change', () => {
+      const val = categorySelect.value;
+      [idFields, walletFields, cardFields].forEach(f => {
+        f.classList.add('hidden');
+        Array.from(f.querySelectorAll('input')).forEach(i => i.required = false);
+      });
 
-      // show/hide relevant sections
-      categorySelect.addEventListener('change', () => {
-        const val = categorySelect.value;
-        [idFields, walletFields, cardFields].forEach(f => {
-          f.classList.add('hidden');
-          Array.from(f.querySelectorAll('input')).forEach(i => i.required = false);
-        });
+      if (val === 'ID') {
+        idFields.classList.remove('hidden');
+        idFields.querySelectorAll('input').forEach(i => i.required = true);
+      } else if (val === 'Wallet') {
+        walletFields.classList.remove('hidden');
+        walletFields.querySelectorAll('input').forEach(i => i.required = true);
+      } else if (val === 'Card') {
+        cardFields.classList.remove('hidden');
+        cardFields.querySelectorAll('input').forEach(i => i.required = true);
+      }
+    });
 
-        if (val === 'ID') {
-          idFields.classList.remove('hidden');
-          idFields.querySelectorAll('input').forEach(i => i.required = true);
-        } else if (val === 'Wallet') {
-          walletFields.classList.remove('hidden');
-          walletFields.querySelectorAll('input').forEach(i => i.required = true);
-        } else if (val === 'Card') {
-          cardFields.classList.remove('hidden');
-          cardFields.querySelectorAll('input').forEach(i => i.required = true);
+    // Hashing function (optional, non-reversible)
+    async function hashValue(value) {
+      const data = new TextEncoder().encode(value);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // OCR scanning
+    photoInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      ocrStatus.textContent = 'Scanning ID for text… (this can take ~5–10s)';
+      try {
+        const { data: { text } } = await Tesseract.recognize(file, 'eng');
+        ocrStatus.textContent = 'Text detected, checking for ID number…';
+
+        // Try to find an ID number pattern (8–12 digits)
+        const match = text.match(/\b\d{8,12}\b/);
+        const id_number = match ? match[0] : '';
+
+        if (id_number) {
+          const last4 = id_number.slice(-4);
+          document.getElementById('id_number').value = last4;
+
+          // Optional: hash full ID locally but do NOT upload full number
+          const hash = await hashValue(id_number);
+          console.log('Hashed full ID (not sent):', hash);
         }
-      });
 
-      form.addEventListener('submit', function(){
-        overlay.style.display = 'flex';
-      });
+        // Try to find possible name fields
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length > 1) {
+          document.getElementById('id_firstName').value = lines[0].split(' ')[0] || '';
+          document.getElementById('id_lastName').value = lines[0].split(' ')[1] || '';
+        }
 
-      iframe.addEventListener('load', function(){
-        overlay.style.display = 'none';
-        result.style.display = 'block';
-        result.innerText = 'Upload received. Keep item secure. Add claim code to manager noticeboard.';
-        form.reset();
-        [idFields, walletFields, cardFields].forEach(f => f.classList.add('hidden'));
-      });
-    })();
+        ocrStatus.textContent = '✅ ID details auto-filled (please verify).';
+      } catch (err) {
+        console.error(err);
+        ocrStatus.textContent = '❌ Could not extract text. Please enter manually.';
+      }
+    });
+
+    // Submission overlay
+    form.addEventListener('submit', function(){
+      overlay.style.display = 'flex';
+    });
+
+    iframe.addEventListener('load', function(){
+      overlay.style.display = 'none';
+      result.style.display = 'block';
+      result.innerText = 'Upload received. Keep item secure. Add claim code to manager noticeboard.';
+      form.reset();
+      [idFields, walletFields, cardFields].forEach(f => f.classList.add('hidden'));
+      ocrStatus.textContent = '';
+    });
+  })();
   </script>
 </body>
 </html>
