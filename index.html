@@ -3,60 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Lost Property — Quick Upload</title>
+  <title>Lost Property — Quick Upload (Improved OCR + Suggestions)</title>
   <style>
-    body {
-      font-family: system-ui, Segoe UI, Helvetica, Arial;
-      max-width: 720px;
-      margin: 2rem auto;
-      padding: 1rem;
-    }
-    label { display: block; margin: 0.6rem 0; }
-    .btn { padding: 0.6rem 0.9rem; border-radius: 6px; border: 0; background: #111; color: #fff; cursor: pointer; }
-    .small { font-size: 0.9rem; color: #555; }
-    #overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,0.6);
-      color: #fff;
-      font-size: 1.1rem;
-      z-index: 999;
-    }
-    input, select {
-      font-size: 1rem;
-      padding: 0.4rem;
-      margin-top: 0.2rem;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .hidden { display: none; }
-    fieldset {
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 0.8rem;
-      margin-top: 1rem;
-      background: #fbfbfb;
-    }
-    .ocr-status {
-      font-size: 0.9rem;
-      color: #444;
-      margin-top: 0.3rem;
-    }
+    body { font-family: system-ui, Segoe UI, Helvetica, Arial; max-width:720px; margin:2rem auto; padding:1rem; }
+    label { display:block; margin:0.6rem 0; }
+    .btn { padding:.6rem .9rem; border-radius:6px; border:0; background:#111; color:#fff; cursor:pointer; }
+    .small { font-size:.9rem; color:#555; }
+    #overlay { display:none; position:fixed; inset:0; align-items:center; justify-content:center; background:rgba(0,0,0,.6); color:#fff; font-size:1.1rem; z-index:999; }
+    input, select, button { font-size:1rem; padding:.4rem; margin-top:.2rem; width:100%; box-sizing:border-box; }
+    .hidden { display:none; }
+    fieldset { border:1px solid #ddd; border-radius:6px; padding:.8rem; margin-top:1rem; background:#fbfbfb; }
+    .ocr-status { font-size:.9rem; color:#444; margin-top:.3rem; }
+    .suggestions { margin-top:.6rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+    .suggestion { background:#fff; border:1px solid #ddd; padding:.4rem .6rem; border-radius:6px; cursor:pointer; }
+    .suggestion:hover { background:#f5f5f5; }
+    .image-preview { max-width:100%; margin-top:.6rem; border-radius:6px; border:1px solid #eee; }
+    .muted { color:#666; font-size:.9rem; }
   </style>
 </head>
 <body>
   <h1>Quick Lost Item Upload</h1>
-  <p class="small">Scan QR → snap photo → choose category → submit. Takes ~10s. Photos retained 30 days.</p>
+  <p class="small">Scan QR → snap photo → choose category → submit. Takes ~5–10s for OCR. Photos retained 30 days.</p>
 
   <form id="uploadForm" action="https://hook.eu2.make.com/gkebdrmtjlkwd6wikd1wsmoht4x41p9v" method="post" enctype="multipart/form-data" target="hidden_iframe" autocomplete="off">
     <input type="hidden" name="venue" id="venueInput" value="Club X">
 
     <label>Photo (required)
       <input type="file" id="photoInput" name="photo" accept="image/*;capture=camera" required>
-      <div id="ocrStatus" class="ocr-status"></div>
+      <div id="ocrStatus" class="ocr-status muted">No image yet</div>
+      <img id="previewImg" class="image-preview hidden" alt="preview">
     </label>
 
     <label>Category
@@ -79,9 +54,17 @@
 
     <fieldset id="idFields" class="hidden">
       <legend>ID Details</legend>
-      <label>First Name <input name="id_firstName" id="id_firstName"></label>
-      <label>Last Name <input name="id_lastName" id="id_lastName"></label>
-      <label>ID Number (last 4 digits only)<input name="id_number" id="id_number"></label>
+      <label>First Name <input name="id_firstName" id="id_firstName" placeholder="First name"></label>
+      <label>Last Name <input name="id_lastName" id="id_lastName" placeholder="Last name"></label>
+      <label>ID Number (last 4 digits only) <input name="id_number" id="id_number" placeholder="e.g. 1234"></label>
+
+      <div style="margin-top:.6rem">
+        <div class="muted">Name suggestions — click to apply (verify before submit):</div>
+        <div id="nameSuggestions" class="suggestions"></div>
+
+        <div style="margin-top:.6rem" class="muted">ID candidates (click to apply last 4 digits):</div>
+        <div id="idSuggestions" class="suggestions"></div>
+      </div>
     </fieldset>
 
     <fieldset id="walletFields" class="hidden">
@@ -96,130 +79,4 @@
       <label>Last Name <input name="card_lastName"></label>
     </fieldset>
 
-    <label>Found by (optional)
-      <input name="foundBy" maxlength="50" placeholder="e.g. Joe - bar">
-    </label>
-
-    <button class="btn" type="submit">Upload</button>
-  </form>
-
-  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-  <div id="overlay">Uploading… please wait</div>
-  <div id="result" style="display:none;margin-top:1rem;padding:0.8rem;border:1px solid #ddd;border-radius:6px;background:#fbfbfb"></div>
-
-  <!-- OCR Library -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-
-  <script>
-  (function(){
-    const params = new URLSearchParams(location.search);
-    const venue = params.get('venue') || 'Club X';
-    document.getElementById('venueInput').value = venue;
-
-    const form = document.getElementById('uploadForm');
-    const overlay = document.getElementById('overlay');
-    const result = document.getElementById('result');
-    const iframe = document.getElementById('hidden_iframe');
-    const categorySelect = document.getElementById('categorySelect');
-    const idFields = document.getElementById('idFields');
-    const walletFields = document.getElementById('walletFields');
-    const cardFields = document.getElementById('cardFields');
-    const photoInput = document.getElementById('photoInput');
-    const ocrStatus = document.getElementById('ocrStatus');
-
-    // show/hide relevant sections
-    categorySelect.addEventListener('change', () => {
-      const val = categorySelect.value;
-      [idFields, walletFields, cardFields].forEach(f => {
-        f.classList.add('hidden');
-        Array.from(f.querySelectorAll('input')).forEach(i => i.required = false);
-      });
-
-      if (val === 'ID') {
-        idFields.classList.remove('hidden');
-        idFields.querySelectorAll('input').forEach(i => i.required = true);
-      } else if (val === 'Wallet') {
-        walletFields.classList.remove('hidden');
-        walletFields.querySelectorAll('input').forEach(i => i.required = true);
-      } else if (val === 'Card') {
-        cardFields.classList.remove('hidden');
-        cardFields.querySelectorAll('input').forEach(i => i.required = true);
-      }
-    });
-
-    // Helper: SHA-256 hash (optional)
-    async function hashValue(value) {
-      const data = new TextEncoder().encode(value);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    // OCR logic with better name + ID detection
-    photoInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      ocrStatus.textContent = 'Scanning ID for text… (~5–10s)';
-
-      try {
-        const { data: { text } } = await Tesseract.recognize(file, 'eng');
-        ocrStatus.textContent = 'Analysing text…';
-
-        // Clean lines: remove MRZ and short nonsense
-        const lines = text
-          .split('\n')
-          .map(l => l.trim())
-          .filter(l => l && !l.includes('<') && !l.includes('>') && l.length > 2);
-
-        console.log('Filtered OCR lines:', lines);
-
-        // Detect name (look for two capitalised words)
-        let nameLine = lines.find(l => /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(l));
-        if (!nameLine) {
-          // fallback: first line with at least two words
-          nameLine = lines.find(l => /^[A-Za-z]+\s+[A-Za-z]+/.test(l));
-        }
-
-        if (nameLine) {
-          const [firstName, ...rest] = nameLine.split(/\s+/);
-          document.getElementById('id_firstName').value = firstName;
-          document.getElementById('id_lastName').value = rest.join(' ');
-        }
-
-        // Try to detect ID number (8–12 digits)
-        const idMatch = text.match(/\b\d{8,12}\b/);
-        if (idMatch) {
-          const idNum = idMatch[0];
-          document.getElementById('id_number').value = idNum.slice(-4);
-          const hash = await hashValue(idNum);
-          console.log('Hashed full ID:', hash);
-        }
-
-        if (nameLine) {
-          ocrStatus.textContent = '✅ ID details auto-filled (please verify).';
-        } else {
-          ocrStatus.textContent = '⚠️ Could not detect full name — please type manually.';
-        }
-
-      } catch (err) {
-        console.error(err);
-        ocrStatus.textContent = '❌ Could not extract text. Please enter manually.';
-      }
-    });
-
-    // Submission overlay
-    form.addEventListener('submit', function(){
-      overlay.style.display = 'flex';
-    });
-
-    iframe.addEventListener('load', function(){
-      overlay.style.display = 'none';
-      result.style.display = 'block';
-      result.innerText = 'Upload received. Keep item secure. Add claim code to manager noticeboard.';
-      form.reset();
-      [idFields, walletFields, cardFields].forEach(f => f.classList.add('hidden'));
-      ocrStatus.textContent = '';
-    });
-  })();
-  </script>
-</body>
-</html>
+    <label>Foun
