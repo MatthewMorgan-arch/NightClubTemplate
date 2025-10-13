@@ -5,15 +5,92 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Lost Property — Quick Upload</title>
   <style>
-    body {
-      font-family: system-ui, Segoe UI, Helvetica, Arial;
-      max-width: 720px;
-      margin: 2rem auto;
-      padding: 1rem;
+    :root {
+      --primary: #111;
+      --accent: #2b6cb0;
+      --bg: #f8f9fb;
+      --card-bg: #fff;
+      --radius: 12px;
+      --shadow: 0 4px 10px rgba(0,0,0,0.05);
     }
-    label { display: block; margin: 0.6rem 0; }
-    .btn { padding: 0.6rem 0.9rem; border-radius: 6px; border: 0; background: #111; color: #fff; cursor: pointer; }
-    .small { font-size: 0.9rem; color: #555; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Helvetica, Arial;
+      background: var(--bg);
+      color: #222;
+      margin: 0;
+      padding: 2rem 1rem;
+      display: flex;
+      justify-content: center;
+    }
+    main {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    h1 {
+      text-align: center;
+      margin-top: 0;
+      font-size: 1.6rem;
+    }
+    p.small {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #555;
+      margin-bottom: 1.5rem;
+    }
+    label {
+      display: block;
+      margin-bottom: 0.9rem;
+      font-weight: 500;
+    }
+    input, select, textarea {
+      font-size: 1rem;
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      margin-top: 0.4rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    fieldset {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+      background: #f9f9f9;
+    }
+    legend {
+      font-weight: 600;
+      color: #333;
+      padding: 0 0.5rem;
+    }
+    button.btn {
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.8rem;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 1rem;
+      transition: background 0.2s;
+    }
+    button.btn:hover {
+      background: #1a4f88;
+    }
+    .hidden { display: none; }
+
+    /* Overlay */
     #overlay {
       display: none;
       position: fixed;
@@ -22,93 +99,91 @@
       justify-content: center;
       background: rgba(0,0,0,0.6);
       color: #fff;
-      font-size: 1.1rem;
+      font-size: 1.2rem;
       z-index: 999;
     }
-    input, select {
-      font-size: 1rem;
-      padding: 0.4rem;
-      margin-top: 0.2rem;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .hidden { display: none; }
-    fieldset {
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 0.8rem;
+    /* Success box */
+    #result {
+      display: none;
       margin-top: 1rem;
-      background: #fbfbfb;
+      padding: 1rem;
+      border-radius: 8px;
+      background: #e6ffed;
+      border: 1px solid #b7f5c0;
+      color: #22543d;
+      text-align: center;
+      animation: fadeIn 0.4s ease;
     }
-    .ocr-status {
-      font-size: 0.9rem;
-      color: #444;
-      margin-top: 0.3rem;
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
 <body>
-  <h1>Quick Lost Item Upload</h1>
-  <p class="small">Scan QR → snap photo → choose category → submit. Takes ~10s. Photos retained 30 days.</p>
+  <main>
+    <h1>Lost Property Upload</h1>
+    <p class="small">Scan QR → add details → submit. Photos retained 30 days.</p>
 
-  <form id="uploadForm" action="https://hook.eu2.make.com/gkebdrmtjlkwd6wikd1wsmoht4x41p9v" method="post" enctype="multipart/form-data" target="hidden_iframe" autocomplete="off">
-    <input type="hidden" name="venue" id="venueInput" value="Club X">
+    <form id="uploadForm" 
+      action="https://hook.eu2.make.com/gkebdrmtjlkwd6wikd1wsmoht4x41p9v" 
+      method="post" enctype="multipart/form-data" target="hidden_iframe" autocomplete="off">
+      
+      <input type="hidden" name="venue" id="venueInput" value="Club X">
 
-    <label>Photo (required)
-      <input type="file" id="photoInput" name="photo" accept="image/*;capture=camera" required>
-      <div id="ocrStatus" class="ocr-status"></div>
-    </label>
+      <label>Photo (required)
+        <input type="file" name="photo" accept="image/*;capture=camera" required>
+      </label>
 
-    <label>Category
-      <select name="category" id="categorySelect" required>
-        <option value="">Select...</option>
-        <option>ID</option>
-        <option>Wallet</option>
-        <option>Phone</option>
-        <option>Keys</option>
-        <option>Card</option>
-        <option>Bag</option>
-        <option>Clothing</option>
-        <option>Other</option>
-      </select>
-    </label>
+      <label>Category
+        <select name="category" id="categorySelect" required>
+          <option value="">Select...</option>
+          <option>ID</option>
+          <option>WALLET</option>
+          <option>PHONE</option>
+          <option>KEYS</option>
+          <option>CARD</option>
+          <option>BAG</option>
+          <option>CLOTHING</option>
+          <option>OTHER</option>
+        </select>
+      </label>
 
-    <label>Short description (required)
-      <input name="desc" id="descInput" maxlength="120" placeholder="e.g. black leather wallet" required>
-    </label>
+      <label>Short Description (required)
+        <input name="desc" maxlength="120" placeholder="e.g. black leather wallet" required>
+      </label>
 
-    <fieldset id="idFields" class="hidden">
-      <legend>ID Details</legend>
-      <label>First Name <input name="id_firstName" id="id_firstName"></label>
-      <label>Last Name <input name="id_lastName" id="id_lastName"></label>
-      <label>ID Number (last 4 digits only)<input name="id_number" id="id_number"></label>
-    </fieldset>
+      <!-- Conditional fields -->
+      <fieldset id="idFields" class="hidden">
+        <legend>ID Details</legend>
+        <label>First Name <input name="id_firstName"></label>
+        <label>Last Name <input name="id_lastName"></label>
+        <label>ID Number (last 4 digits only)<input name="id_number"></label>
+      </fieldset>
 
-    <fieldset id="walletFields" class="hidden">
-      <legend>Wallet — Card Name</legend>
-      <label>First Name <input name="wallet_firstName"></label>
-      <label>Last Name <input name="wallet_lastName"></label>
-    </fieldset>
+      <fieldset id="walletFields" class="hidden">
+        <legend>Wallet — Card Name</legend>
+        <label>First Name <input name="wallet_firstName"></label>
+        <label>Last Name <input name="wallet_lastName"></label>
+      </fieldset>
 
-    <fieldset id="cardFields" class="hidden">
-      <legend>Card Details</legend>
-      <label>First Name <input name="card_firstName"></label>
-      <label>Last Name <input name="card_lastName"></label>
-    </fieldset>
+      <fieldset id="cardFields" class="hidden">
+        <legend>Card Details</legend>
+        <label>First Name <input name="card_firstName"></label>
+        <label>Last Name <input name="card_lastName"></label>
+      </fieldset>
 
-    <label>Found by (optional)
-      <input name="foundBy" maxlength="50" placeholder="e.g. Joe - bar">
-    </label>
+      <label>Found by (optional)
+        <input name="foundBy" maxlength="50" placeholder="e.g. Joe - bar">
+      </label>
 
-    <button class="btn" type="submit">Upload</button>
-  </form>
+      <button class="btn" type="submit">Upload</button>
+    </form>
 
-  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-  <div id="overlay">Uploading… please wait</div>
-  <div id="result" style="display:none;margin-top:1rem;padding:0.8rem;border:1px solid #ddd;border-radius:6px;background:#fbfbfb"></div>
-
-  <!-- OCR Library -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+    <div id="overlay">Uploading… please wait</div>
+    <div id="result">Upload received. Keep item secure. Add claim code to manager noticeboard.</div>
+  </main>
 
   <script>
   (function(){
@@ -124,85 +199,28 @@
     const idFields = document.getElementById('idFields');
     const walletFields = document.getElementById('walletFields');
     const cardFields = document.getElementById('cardFields');
-    const photoInput = document.getElementById('photoInput');
-    const ocrStatus = document.getElementById('ocrStatus');
 
-    // show/hide relevant sections
+    // Toggle fieldsets
     categorySelect.addEventListener('change', () => {
+      [idFields, walletFields, cardFields].forEach(f => f.classList.add('hidden'));
       const val = categorySelect.value;
-      [idFields, walletFields, cardFields].forEach(f => {
-        f.classList.add('hidden');
-        Array.from(f.querySelectorAll('input')).forEach(i => i.required = false);
-      });
-
-      if (val === 'ID') {
-        idFields.classList.remove('hidden');
-        idFields.querySelectorAll('input').forEach(i => i.required = true);
-      } else if (val === 'Wallet') {
-        walletFields.classList.remove('hidden');
-        walletFields.querySelectorAll('input').forEach(i => i.required = true);
-      } else if (val === 'Card') {
-        cardFields.classList.remove('hidden');
-        cardFields.querySelectorAll('input').forEach(i => i.required = true);
-      }
+      if (val === 'ID') idFields.classList.remove('hidden');
+      else if (val === 'Wallet') walletFields.classList.remove('hidden');
+      else if (val === 'Card') cardFields.classList.remove('hidden');
     });
 
-    // Hashing function (optional, non-reversible)
-    async function hashValue(value) {
-      const data = new TextEncoder().encode(value);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    // OCR scanning
-    photoInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      ocrStatus.textContent = 'Scanning ID for text… (this can take ~5–10s)';
-      try {
-        const { data: { text } } = await Tesseract.recognize(file, 'eng');
-        ocrStatus.textContent = 'Text detected, checking for ID number…';
-
-        // Try to find an ID number pattern (8–12 digits)
-        const match = text.match(/\b\d{8,12}\b/);
-        const id_number = match ? match[0] : '';
-
-        if (id_number) {
-          const last4 = id_number.slice(-4);
-          document.getElementById('id_number').value = last4;
-
-          // Optional: hash full ID locally but do NOT upload full number
-          const hash = await hashValue(id_number);
-          console.log('Hashed full ID (not sent):', hash);
-        }
-
-        // Try to find possible name fields
-        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-        if (lines.length > 1) {
-          document.getElementById('id_firstName').value = lines[0].split(' ')[0] || '';
-          document.getElementById('id_lastName').value = lines[0].split(' ')[1] || '';
-        }
-
-        ocrStatus.textContent = '✅ ID details auto-filled (please verify).';
-      } catch (err) {
-        console.error(err);
-        ocrStatus.textContent = '❌ Could not extract text. Please enter manually.';
-      }
-    });
-
-    // Submission overlay
-    form.addEventListener('submit', function(){
+    // Show overlay while submitting
+    form.addEventListener('submit', () => {
       overlay.style.display = 'flex';
+      result.style.display = 'none';
     });
 
-    iframe.addEventListener('load', function(){
+    // After upload done
+    iframe.addEventListener('load', () => {
       overlay.style.display = 'none';
       result.style.display = 'block';
-      result.innerText = 'Upload received. Keep item secure. Add claim code to manager noticeboard.';
       form.reset();
       [idFields, walletFields, cardFields].forEach(f => f.classList.add('hidden'));
-      ocrStatus.textContent = '';
     });
   })();
   </script>
