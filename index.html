@@ -6,7 +6,6 @@
   <title>Lost Property — Quick Upload</title>
   <style>
     :root {
-      --primary: #111;
       --accent: #2b6cb0;
       --bg: #f8f9fb;
       --card-bg: #fff;
@@ -46,7 +45,7 @@
       margin-bottom: 0.9rem;
       font-weight: 500;
     }
-    input, select, textarea {
+    input, select {
       font-size: 1rem;
       width: 100%;
       padding: 0.6rem 0.8rem;
@@ -57,7 +56,7 @@
       box-sizing: border-box;
       transition: border-color 0.2s;
     }
-    input:focus, select:focus, textarea:focus {
+    input:focus, select:focus {
       outline: none;
       border-color: var(--accent);
     }
@@ -90,7 +89,6 @@
     }
     .hidden { display: none; }
 
-    /* Overlay */
     #overlay {
       display: none;
       position: fixed;
@@ -102,7 +100,7 @@
       font-size: 1.2rem;
       z-index: 999;
     }
-    /* Success box */
+
     #result {
       display: none;
       margin-top: 1rem;
@@ -114,6 +112,7 @@
       text-align: center;
       animation: fadeIn 0.4s ease;
     }
+
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
@@ -130,35 +129,43 @@
       method="post" enctype="multipart/form-data" target="hidden_iframe" autocomplete="off">
       
       <input type="hidden" name="venue" id="venueInput" value="Club X">
+      <input type="hidden" name="venue_id" value="6662fb70-7f65-4a34-9fbc-dc8bc7e3b92b">
+      <input type="hidden" name="status" value="Logged">
+      <input type="hidden" name="claim_readiness_score" value="88.0">
 
       <label>Photo (required)
         <input type="file" name="photo" accept="image/*;capture=camera" required>
       </label>
 
-      <label>Category
-        <select name="category" id="categorySelect" required>
-          <option value="">Select...</option>
-          <option>ID</option>
-          <option>WALLET</option>
-          <option>PHONE</option>
-          <option>KEYS</option>
-          <option>CARD</option>
-          <option>BAG</option>
-          <option>CLOTHING</option>
-          <option>OTHER</option>
-        </select>
-      </label>
+    <label>Category
+  <select name="category" id="categorySelect" required>
+    <option value="">SELECT...</option>
+    <option>ID</option>
+    <option>WALLET</option>
+    <option>PHONE</option>
+    <option>KEYS</option>
+    <option>CARD</option>
+    <option>BAG</option>
+    <option>CLOTHING</option>
+    <option>OTHER</option>
+  </select>
+</label>
+
 
       <label>Short Description (required)
         <input name="desc" maxlength="120" placeholder="e.g. black leather wallet" required>
       </label>
 
+      <!-- Optional storage location -->
+      <label>Storage Location (optional)
+        <input name="storage_location" maxlength="80" placeholder="e.g. Safe box A2">
+      </label>
+
       <!-- Conditional fields -->
       <fieldset id="idFields" class="hidden">
         <legend>ID Details</legend>
-        <label>First Name <input name="id_firstName"></label>
-        <label>Last Name <input name="id_lastName"></label>
-        <label>ID Number (last 4 digits only)<input name="id_number"></label>
+        <label>First Name <input name="claimant_name" placeholder="Name on ID"></label>
+        <label>ID Number (last 4 digits only)<input name="id_number" placeholder="1234"></label>
       </fieldset>
 
       <fieldset id="walletFields" class="hidden">
@@ -174,7 +181,7 @@
       </fieldset>
 
       <label>Found by (optional)
-        <input name="foundBy" maxlength="50" placeholder="e.g. Joe - bar">
+        <input name="found_by" maxlength="50" placeholder="e.g. Joe - bar staff">
       </label>
 
       <button class="btn" type="submit">Upload</button>
@@ -200,7 +207,6 @@
     const walletFields = document.getElementById('walletFields');
     const cardFields = document.getElementById('cardFields');
 
-    // Toggle fieldsets
     categorySelect.addEventListener('change', () => {
       [idFields, walletFields, cardFields].forEach(f => f.classList.add('hidden'));
       const val = categorySelect.value;
@@ -209,13 +215,11 @@
       else if (val === 'Card') cardFields.classList.remove('hidden');
     });
 
-    // Show overlay while submitting
     form.addEventListener('submit', () => {
       overlay.style.display = 'flex';
       result.style.display = 'none';
     });
 
-    // After upload done
     iframe.addEventListener('load', () => {
       overlay.style.display = 'none';
       result.style.display = 'block';
