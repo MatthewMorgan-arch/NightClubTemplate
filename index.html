@@ -137,26 +137,24 @@
         <input type="file" name="photo" accept="image/*;capture=camera" required>
       </label>
 
-    <label>Category
-  <select name="category" id="categorySelect" required>
-    <option value="">SELECT...</option>
-    <option>ID</option>
-    <option>WALLET</option>
-    <option>PHONE</option>
-    <option>KEYS</option>
-    <option>CARD</option>
-    <option>BAG</option>
-    <option>CLOTHING</option>
-    <option>OTHER</option>
-  </select>
-</label>
-
+      <label>Category
+        <select name="category" id="categorySelect" required>
+          <option value="">SELECT...</option>
+          <option>ID</option>
+          <option>WALLET</option>
+          <option>PHONE</option>
+          <option>KEYS</option>
+          <option>CARD</option>
+          <option>BAG</option>
+          <option>CLOTHING</option>
+          <option>OTHER</option>
+        </select>
+      </label>
 
       <label>Short Description (required)
         <input name="desc" maxlength="120" placeholder="e.g. black leather wallet" required>
       </label>
 
-      <!-- Optional storage location -->
       <label>Storage Location (optional)
         <input name="storage_location" maxlength="80" placeholder="e.g. Safe box A2">
       </label>
@@ -164,7 +162,8 @@
       <!-- Conditional fields -->
       <fieldset id="idFields" class="hidden">
         <legend>ID Details</legend>
-        <label>First Name <input name="claimant_name" placeholder="Name on ID"></label>
+        <label>First Name <input name="id_firstName" placeholder="First Name on ID"></label>
+        <label>Last Name <input name="id_lastName" placeholder="Last Name on ID"></label>
         <label>ID Number (last 4 digits only)<input name="id_number" placeholder="1234"></label>
       </fieldset>
 
@@ -176,8 +175,8 @@
 
       <fieldset id="cardFields" class="hidden">
         <legend>Card Details</legend>
-        <label>First Name <input name="card_firstName"></label>
-        <label>Last Name <input name="card_lastName"></label>
+        <label>First Name <input name="card_firstName" placeholder="First Name on Card"></label>
+        <label>Last Name <input name="card_lastName" placeholder="Last Name on Card"></label>
       </fieldset>
 
       <label>Found by (optional)
@@ -211,8 +210,8 @@
       [idFields, walletFields, cardFields].forEach(f => f.classList.add('hidden'));
       const val = categorySelect.value;
       if (val === 'ID') idFields.classList.remove('hidden');
-      else if (val === 'Wallet') walletFields.classList.remove('hidden');
-      else if (val === 'Card') cardFields.classList.remove('hidden');
+      else if (val === 'WALLET') walletFields.classList.remove('hidden');
+      else if (val === 'CARD') cardFields.classList.remove('hidden');
     });
 
     form.addEventListener('submit', () => {
